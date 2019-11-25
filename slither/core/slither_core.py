@@ -4,6 +4,7 @@
 import os
 import logging
 import json
+import re
 from slither.core.context.context import Context
 from slither.slithir.operations import InternalCall
 from slither.utils.colors import red
@@ -204,6 +205,12 @@ class Slither(Context):
     ###################################################################################
     ###################################################################################
 
+    def relative_path_format(self, path):
+        """
+           Strip relative paths of "." and ".."
+        """
+        return path.split('..')[-1].strip('.').strip('/')
+
     def valid_result(self, r):
         '''
             Check if the result is valid
@@ -212,8 +219,11 @@ class Slither(Context):
                 - Or a similar result was reported and saved during a previous run
                 - The --exclude-dependencies flag is set and results are only related to dependencies
         '''
-        source_mapping_elements = [elem['source_mapping']['filename_absolute'] for elem in r['elements'] if 'source_mapping' in elem]
-        if r['elements'] and all((any(path in src_mapping for path in self._paths_to_filter) for src_mapping in source_mapping_elements)):
+
+        source_mapping_elements = [os.path.normpath(elem['source_mapping']['filename_absolute']) for elem in r['elements'] if 'source_mapping' in elem]
+
+        matching = all(any(bool(re.search(self.relative_path_format(path), src_mapping)) for path in self._paths_to_filter) for src_mapping in source_mapping_elements)
+        if r['elements'] and matching:
             return False
         if r['elements'] and self._exclude_dependencies:
             return not all(element['source_mapping']['is_dependency'] for element in r['elements'])
